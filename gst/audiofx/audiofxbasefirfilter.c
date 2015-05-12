@@ -318,16 +318,17 @@ process_fft_##channels##_##width (GstAudioFXBaseFIRFilter * self, const g##ctype
           buffer + real_buffer_length * j + kernel_length - 1, fft_buffer); \
       \
       /* Complex multiplication of input and filter spectrum */ \
+       current_channel_freq_reponse = frequency_response + ( j * frequency_response_length);  \
       for (i = 0; i < frequency_response_length; i++) { \
 	re = fft_buffer[i].r; \
 	im = fft_buffer[i].i; \
         \
         fft_buffer[i].r = \
-            re * frequency_response[i].r - \
-            im * frequency_response[i].i; \
+            re * current_channel_freq_reponse[i].r - \
+            im * current_channel_freq_reponse[i].i; \
         fft_buffer[i].i = \
-            re * frequency_response[i].i + \
-            im * frequency_response[i].r; \
+            re * current_channel_freq_reponse[i].i + \
+            im * current_channel_freq_reponse[i].r; \
       } \
       \
       /* Calculate inverse FFT of the result */ \
@@ -376,7 +377,7 @@ DEFINE_FFT_PROCESS_FUNC_FIXED_CHANNELS (64, 2, double);
 /* Element class */
 static void
     gst_audio_fx_base_fir_filter_calculate_frequency_response
-    (GstAudioFXBaseFIRFilter * self)
+    (GstAudioFXBaseFIRFilter * self, gint channels)
 {
   gst_fft_f64_free (self->fft);
   self->fft = NULL;
@@ -397,19 +398,26 @@ static void
     block_length = gst_fft_next_fast_length (block_length);
     self->block_length = block_length;
 
-    kernel_tmp = g_new0 (gdouble, block_length);
-    memcpy (kernel_tmp, kernel, self->kernel_length * sizeof (gdouble));
+    kernel_tmp = g_new0 (gdouble, block_length * channels);
+    for (i = 0; i < channels; i++) {
+      memcpy (kernel_tmp + (i * block_length),
+          kernel + (i * self->kernel_length),
+          self->kernel_length * sizeof (gdouble));
+    }
 
     self->fft = gst_fft_f64_new (block_length, FALSE);
     self->ifft = gst_fft_f64_new (block_length, TRUE);
     self->frequency_response_length = block_length / 2 + 1;
     self->frequency_response =
-        g_new (GstFFTF64Complex, self->frequency_response_length);
-    gst_fft_f64_fft (self->fft, kernel_tmp, self->frequency_response);
+        g_new0 (GstFFTF64Complex, self->frequency_response_length * channels);
+    for (i = 0; i < channels; i++) {
+      gst_fft_f64_fft (self->fft, kernel_tmp + (i * block_length),
+          self->frequency_response + (i * self->frequency_response_length));
+    }
     g_free (kernel_tmp);
 
     /* Normalize to make sure IFFT(FFT(x)) == x */
-    for (i = 0; i < self->frequency_response_length; i++) {
+    for (i = 0; i < self->frequency_response_length * channels; i++) {
       self->frequency_response[i].r /= block_length;
       self->frequency_response[i].i /= block_length;
     }
@@ -1076,8 +1084,9 @@ gst_audio_fx_base_fir_filter_set_kernel (GstAudioFXBaseFIRFilter * self,
 
   self->kernel = kernel;
   self->kernel_length = kernel_length;
-
-  gst_audio_fx_base_fir_filter_calculate_frequency_response (self);
+  self->kernel_length /= channels;
+  gst_audio_fx_base_fir_filter_calculate_frequency_response (self,
+      GST_AUDIO_FILTER_CAST (self)->format.channels);
   gst_audio_fx_base_fir_filter_select_process_function (self,
       GST_AUDIO_FILTER_CAST (self)->format.width,
       GST_AUDIO_FILTER_CAST (self)->format.channels);
