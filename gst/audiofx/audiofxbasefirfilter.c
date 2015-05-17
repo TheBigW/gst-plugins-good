@@ -122,27 +122,28 @@ process_##channels##_##width (GstAudioFXBaseFIRFilter * self, const g##ctype * s
   gdouble *buffer = self->buffer; \
   gdouble *kernel = self->kernel; \
   guint buffer_length = self->buffer_length; \
+  guint num_samples = input_samples * channels; \
   \
   if (!buffer) { \
     self->buffer_length = buffer_length = kernel_length * channels; \
     self->buffer = buffer = g_new0 (gdouble, self->buffer_length); \
   } \
-  \
+  GST_WARNING("kernel length : %i", kernel_length); \
   /* convolution */ \
-  for (i = 0; i < input_samples; i++) { \
+  for (i = 0; i < num_samples; i++) { \
     dst[i] = 0.0; \
     k = i % channels; \
     l = i / channels; \
     from_input = MIN (l, kernel_length-1); \
     off = l * channels + k; \
     for (j = 0; j <= from_input; j++) { \
-      dst[i] += src[off] * kernel[j]; \
+      dst[i] += src[off] * kernel[j + k * kernel_length]; \
       off -= channels; \
     } \
     /* j == from_input && off == (l - j) * channels + k */ \
     off += kernel_length * channels; \
     for (; j < kernel_length; j++) { \
-      dst[i] += buffer[off] * kernel[j]; \
+      dst[i] += buffer[off] * kernel[j + k * kernel_length]; \
       off -= channels; \
     } \
   } \
@@ -152,22 +153,22 @@ process_##channels##_##width (GstAudioFXBaseFIRFilter * self, const g##ctype * s
    * the kernel length */ \
   /* from now on take kernel length as length over all channels */ \
   kernel_length *= channels; \
-  if (input_samples < kernel_length) \
-    res_start = kernel_length - input_samples; \
+  if (num_samples < kernel_length) \
+    res_start = kernel_length - num_samples; \
   else \
     res_start = 0; \
   \
   for (i = 0; i < res_start; i++) \
-    buffer[i] = buffer[i + input_samples]; \
+    buffer[i] = buffer[i + num_samples]; \
   /* i == res_start */ \
   for (; i < kernel_length; i++) \
-    buffer[i] = src[input_samples - kernel_length + i]; \
+    buffer[i] = src[num_samples - kernel_length + i]; \
   \
   self->buffer_fill += kernel_length - res_start; \
   if (self->buffer_fill > kernel_length) \
     self->buffer_fill = kernel_length; \
   \
-  return input_samples / channels; \
+  return input_samples; \
 } G_STMT_END
 
 DEFINE_PROCESS_FUNC (32, float);
