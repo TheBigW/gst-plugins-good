@@ -84,6 +84,9 @@ struct _GstAudioFXBaseFIRFilter {
   guint64 start_off;            /* start offset after a discont */
   guint64 nsamples_out;         /* number of output samples since last discont */
   guint64 nsamples_in;          /* number of input samples since last discont */
+  gint channels;
+  guint kernel_channels;		/* number of channels within the kernel*/
+
 };
 
 struct _GstAudioFXBaseFIRFilterClass {
