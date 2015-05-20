@@ -69,15 +69,17 @@ enum
 GST_BOILERPLATE_FULL (GstAudioFXBaseFIRFilter, gst_audio_fx_base_fir_filter,
     GstAudioFilter, GST_TYPE_AUDIO_FILTER, DEBUG_INIT);
 
-static GstFlowReturn gst_audio_fx_base_fir_filter_transform (GstBaseTransform *
-    base, GstBuffer * inbuf, GstBuffer * outbuf);
+static GstFlowReturn gst_audio_fx_base_fir_filter_transform (GstBaseTransform
+    * base, GstBuffer * inbuf, GstBuffer * outbuf);
 static gboolean gst_audio_fx_base_fir_filter_start (GstBaseTransform * base);
 static gboolean gst_audio_fx_base_fir_filter_stop (GstBaseTransform * base);
 static gboolean gst_audio_fx_base_fir_filter_event (GstBaseTransform * base,
     GstEvent * event);
-static gboolean gst_audio_fx_base_fir_filter_transform_size (GstBaseTransform *
-    base, GstPadDirection direction, GstCaps * caps, guint size,
-    GstCaps * othercaps, guint * othersize);
+static gboolean gst_audio_fx_base_fir_filter_transform_size (GstBaseTransform
+    * base,
+    GstPadDirection
+    direction,
+    GstCaps * caps, guint size, GstCaps * othercaps, guint * othersize);
 static gboolean gst_audio_fx_base_fir_filter_setup (GstAudioFilter * base,
     GstRingBufferSpec * format);
 
@@ -427,8 +429,8 @@ static void
 
 /* Must be called with base transform lock! */
 static void
-gst_audio_fx_base_fir_filter_select_process_function (GstAudioFXBaseFIRFilter *
-    self, gint width, gint channels)
+gst_audio_fx_base_fir_filter_select_process_function (GstAudioFXBaseFIRFilter
+    * self, gint width, gint channels)
 {
   if (width == 32 && self->fft && !self->low_latency) {
     if (channels == 1)
@@ -496,7 +498,8 @@ gst_audio_fx_base_fir_filter_set_property (GObject * object, guint prop_id,
   GstAudioFXBaseFIRFilter *self = GST_AUDIO_FX_BASE_FIR_FILTER (object);
 
   switch (prop_id) {
-    case PROP_LOW_LATENCY:{
+    case PROP_LOW_LATENCY:
+    {
       gboolean low_latency;
 
       if (GST_STATE (self) >= GST_STATE_PAUSED) {
@@ -512,13 +515,15 @@ gst_audio_fx_base_fir_filter_set_property (GObject * object, guint prop_id,
         self->low_latency = low_latency;
         gst_audio_fx_base_fir_filter_calculate_frequency_response (self);
         gst_audio_fx_base_fir_filter_select_process_function (self,
-            GST_AUDIO_FILTER_CAST (self)->format.width,
+            GST_AUDIO_FILTER_CAST
+            (self)->format.width,
             GST_AUDIO_FILTER_CAST (self)->format.channels);
       }
       GST_BASE_TRANSFORM_UNLOCK (self);
       break;
     }
-    case PROP_DRAIN_ON_CHANGES:{
+    case PROP_DRAIN_ON_CHANGES:
+    {
       GST_BASE_TRANSFORM_LOCK (self);
       self->drain_on_changes = g_value_get_boolean (value);
       GST_BASE_TRANSFORM_UNLOCK (self);
@@ -580,11 +585,12 @@ gst_audio_fx_base_fir_filter_class_init (GstAudioFXBaseFIRFilterClass * klass)
    * Since: 0.10.18
    */
   g_object_class_install_property (gobject_class, PROP_LOW_LATENCY,
-      g_param_spec_boolean ("low-latency", "Low latency",
+      g_param_spec_boolean ("low-latency",
+          "Low latency",
           "Operate in low latency mode. This mode is slower but the "
           "latency will only be the filter pre-latency. "
-          "Can only be changed in states < PAUSED!", DEFAULT_LOW_LATENCY,
-          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+          "Can only be changed in states < PAUSED!",
+          DEFAULT_LOW_LATENCY, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   /**
    * GstAudioFXBaseFIRFilter::drain-on-changes:
@@ -597,7 +603,8 @@ gst_audio_fx_base_fir_filter_class_init (GstAudioFXBaseFIRFilterClass * klass)
    * Since: 0.10.18
    */
   g_object_class_install_property (gobject_class, PROP_DRAIN_ON_CHANGES,
-      g_param_spec_boolean ("drain-on-changes", "Drain on changes",
+      g_param_spec_boolean ("drain-on-changes",
+          "Drain on changes",
           "Drains the filter when its coeficients change",
           DEFAULT_DRAIN_ON_CHANGES,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
@@ -740,12 +747,15 @@ gst_audio_fx_base_fir_filter_push_residue (GstAudioFXBaseFIRFilter * self)
     GST_BUFFER_OFFSET_END (outbuf) = GST_BUFFER_OFFSET (outbuf) + outsamples;
   }
 
-  GST_DEBUG_OBJECT (self, "Pushing residue buffer of size %d with timestamp: %"
-      GST_TIME_FORMAT ", duration: %" GST_TIME_FORMAT ", offset: %"
-      G_GUINT64_FORMAT ", offset_end: %" G_GUINT64_FORMAT ", nsamples_out: %d",
-      GST_BUFFER_SIZE (outbuf), GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (outbuf)),
-      GST_TIME_ARGS (GST_BUFFER_DURATION (outbuf)), GST_BUFFER_OFFSET (outbuf),
-      GST_BUFFER_OFFSET_END (outbuf), outsamples);
+  GST_DEBUG_OBJECT (self,
+      "Pushing residue buffer of size %d with timestamp: %"
+      GST_TIME_FORMAT ", duration: %" GST_TIME_FORMAT
+      ", offset: %" G_GUINT64_FORMAT ", offset_end: %"
+      G_GUINT64_FORMAT ", nsamples_out: %d",
+      GST_BUFFER_SIZE (outbuf),
+      GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (outbuf)),
+      GST_TIME_ARGS (GST_BUFFER_DURATION (outbuf)),
+      GST_BUFFER_OFFSET (outbuf), GST_BUFFER_OFFSET_END (outbuf), outsamples);
 
   res = gst_pad_push (GST_BASE_TRANSFORM_CAST (self)->srcpad, outbuf);
 
@@ -787,8 +797,8 @@ gst_audio_fx_base_fir_filter_setup (GstAudioFilter * base,
 
 static gboolean
 gst_audio_fx_base_fir_filter_transform_size (GstBaseTransform * base,
-    GstPadDirection direction, GstCaps * caps, guint size, GstCaps * othercaps,
-    guint * othersize)
+    GstPadDirection direction,
+    GstCaps * caps, guint size, GstCaps * othercaps, guint * othersize)
 {
   GstAudioFXBaseFIRFilter *self = GST_AUDIO_FX_BASE_FIR_FILTER (base);
   guint blocklen;
@@ -920,10 +930,13 @@ gst_audio_fx_base_fir_filter_transform (GstBaseTransform * base,
   }
 
   GST_DEBUG_OBJECT (self, "Pushing buffer of size %d with timestamp: %"
-      GST_TIME_FORMAT ", duration: %" GST_TIME_FORMAT ", offset: %"
-      G_GUINT64_FORMAT ", offset_end: %" G_GUINT64_FORMAT ", nsamples_out: %d",
-      GST_BUFFER_SIZE (outbuf), GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (outbuf)),
-      GST_TIME_ARGS (GST_BUFFER_DURATION (outbuf)), GST_BUFFER_OFFSET (outbuf),
+      GST_TIME_FORMAT ", duration: %" GST_TIME_FORMAT
+      ", offset: %" G_GUINT64_FORMAT ", offset_end: %"
+      G_GUINT64_FORMAT ", nsamples_out: %d",
+      GST_BUFFER_SIZE (outbuf),
+      GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (outbuf)),
+      GST_TIME_ARGS (GST_BUFFER_DURATION (outbuf)),
+      GST_BUFFER_OFFSET (outbuf),
       GST_BUFFER_OFFSET_END (outbuf), generated_samples);
 
   return GST_FLOW_OK;
@@ -1048,6 +1061,28 @@ gst_audio_fx_base_fir_filter_event (GstBaseTransform * base, GstEvent * event)
 }
 
 void
+gst_audio_fx_base_fir_filter_set_multi_kernel (GstAudioFXBaseFIRFilter * self,
+    gdouble * kernel,
+    guint kernel_length,
+    guint64 latency, const GstAudioInfo * info, guint kernel_channels)
+{
+  gint channels;
+  self->kernel_channels = kernel_channels;
+  //handle too few kernels for num channels
+  if (info) {
+    channels = GST_AUDIO_INFO_CHANNELS (info);
+  } else {
+    channels = GST_AUDIO_FILTER_CHANNELS (self);
+  }
+  if (kernel_channels >= channels) {
+    self->kernel_channels = 1;
+    GST_WARNING ("to few kernels for current channels -> reset to 1");
+  }
+  gst_audio_fx_base_fir_filter_set_kernel (self, kernel, kernel_length,
+      latency, info);
+}
+
+void
 gst_audio_fx_base_fir_filter_set_kernel (GstAudioFXBaseFIRFilter * self,
     gdouble * kernel, guint kernel_length, guint64 latency)
 {
@@ -1059,9 +1094,11 @@ gst_audio_fx_base_fir_filter_set_kernel (GstAudioFXBaseFIRFilter * self,
   GST_BASE_TRANSFORM_LOCK (self);
 
   latency_changed = (self->latency != latency
-      || (!self->low_latency && self->kernel_length < FFT_THRESHOLD
+      || (!self->low_latency
+          && self->kernel_length < FFT_THRESHOLD
           && kernel_length >= FFT_THRESHOLD)
-      || (!self->low_latency && self->kernel_length >= FFT_THRESHOLD
+      || (!self->low_latency
+          && self->kernel_length >= FFT_THRESHOLD
           && kernel_length < FFT_THRESHOLD));
 
   /* FIXME: If the latency changes, the buffer size changes too and we
@@ -1089,8 +1126,8 @@ gst_audio_fx_base_fir_filter_set_kernel (GstAudioFXBaseFIRFilter * self,
   gst_audio_fx_base_fir_filter_calculate_frequency_response (self,
       GST_AUDIO_FILTER_CAST (self)->format.channels);
   gst_audio_fx_base_fir_filter_select_process_function (self,
-      GST_AUDIO_FILTER_CAST (self)->format.width,
-      GST_AUDIO_FILTER_CAST (self)->format.channels);
+      GST_AUDIO_FILTER_CAST
+      (self)->format.width, GST_AUDIO_FILTER_CAST (self)->format.channels);
 
   if (latency_changed) {
     self->latency = latency;

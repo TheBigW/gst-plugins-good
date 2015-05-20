@@ -72,7 +72,8 @@ enum
 {
   PROP_0,
   PROP_KERNEL,
-  PROP_LATENCY
+  PROP_LATENCY,
+  PROP_MULTI_KERNEL
 };
 
 static guint gst_audio_fir_filter_signals[LAST_SIGNAL] = { 0, };
@@ -84,10 +85,10 @@ static guint gst_audio_fir_filter_signals[LAST_SIGNAL] = { 0, };
 GST_BOILERPLATE_FULL (GstAudioFIRFilter, gst_audio_fir_filter, GstAudioFilter,
     GST_TYPE_AUDIO_FX_BASE_FIR_FILTER, DEBUG_INIT);
 
-static void gst_audio_fir_filter_set_property (GObject * object, guint prop_id,
-    const GValue * value, GParamSpec * pspec);
-static void gst_audio_fir_filter_get_property (GObject * object, guint prop_id,
-    GValue * value, GParamSpec * pspec);
+static void gst_audio_fir_filter_set_property (GObject * object,
+    guint prop_id, const GValue * value, GParamSpec * pspec);
+static void gst_audio_fir_filter_get_property (GObject * object,
+    guint prop_id, GValue * value, GParamSpec * pspec);
 static void gst_audio_fir_filter_finalize (GObject * object);
 
 static gboolean gst_audio_fir_filter_setup (GstAudioFilter * base,
@@ -100,7 +101,8 @@ gst_audio_fir_filter_base_init (gpointer g_class)
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
   gst_element_class_set_details_simple (element_class,
-      "Audio FIR filter", "Filter/Effect/Audio",
+      "Audio FIR filter",
+      "Filter/Effect/Audio",
       "Generic audio FIR filter with custom filter kernel",
       "Sebastian Dröge <sebastian.droege@collabora.co.uk>");
 }
@@ -116,11 +118,19 @@ gst_audio_fir_filter_class_init (GstAudioFIRFilterClass * klass)
   gobject_class->finalize = gst_audio_fir_filter_finalize;
 
   g_object_class_install_property (gobject_class, PROP_KERNEL,
-      g_param_spec_value_array ("kernel", "Filter Kernel",
+      g_param_spec_value_array ("kernel",
+          "Filter Kernel",
           "Filter kernel for the FIR filter",
-          g_param_spec_double ("Element", "Filter Kernel Element",
-              "Element of the filter kernel", -G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
-              G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS),
+          g_param_spec_double
+          ("Element",
+              "Filter Kernel Element",
+              "Element of the filter kernel",
+              -G_MAXDOUBLE,
+              G_MAXDOUBLE,
+              0.0,
+              G_PARAM_READWRITE
+              |
+              G_PARAM_STATIC_STRINGS),
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (gobject_class, PROP_LATENCY,
       g_param_spec_uint64 ("latency", "Latecy",
@@ -140,8 +150,64 @@ gst_audio_fir_filter_class_init (GstAudioFIRFilterClass * klass)
    */
   gst_audio_fir_filter_signals[SIGNAL_RATE_CHANGED] =
       g_signal_new ("rate-changed", G_TYPE_FROM_CLASS (klass),
-      G_SIGNAL_RUN_LAST, G_STRUCT_OFFSET (GstAudioFIRFilterClass, rate_changed),
-      NULL, NULL, gst_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
+      G_SIGNAL_RUN_LAST, G_STRUCT_OFFSET (GstAudioFIRFilterClass,
+          rate_changed), NULL,
+      NULL, gst_marshal_VOID__INT, G_TYPE_NONE, 1, G_TYPE_INT);
+}
+
+static void
+clean_kernels (GstAudioFIRFilter * self)
+{
+  if (self->kernel)
+    g_value_array_free (self->kernel);
+  if (self->multi_kernel) {
+    guint i;
+    for (i = 0; i < self->multi_kernel->n_values; i++) {
+      GValue *v = g_value_array_get_nth (self->multi_kernel, i);
+      g_value_array_free (g_value_get_object (v));
+    }
+    g_value_array_free (self->multi_kernel);
+  }
+}
+
+static void
+gst_audio_fir_filter_update_multi_kernel (GstAudioFIRFilter * self,
+    GValueArray * va)
+{
+  guint num_overall_filter_values;
+  guint num_channel_filters;
+  guint channel_filter_length;
+  guint i, j;
+  GValueArray *sub_kernel;
+  gdouble *kernel;
+
+  if (va) {
+    clean_kernels (self);
+    self->multi_kernel = va;
+
+    num_channel_filters = va->n_values;
+    channel_filter_length = ((GValueArray *)
+        g_value_get_object (g_value_array_get_nth (va, 0)))->n_values;
+    num_overall_filter_values = num_channel_filters * channel_filter_length;
+    kernel = g_new (gdouble, num_overall_filter_values);
+    for (i = 0; i < va->n_values; i++) {
+      GValue *v = g_value_array_get_nth (va, i);
+      sub_kernel = g_value_get_object (v);
+      if (channel_filter_length != sub_kernel->n_values) {
+        GST_WARNING ("kernel length missmatch -> exiting");
+        g_free (kernel);
+        return;
+      }
+      for (j = 0; j < sub_kernel->n_values; i++) {
+        v = g_value_array_get_nth (sub_kernel, j);
+        kernel[j + i * va->n_values] = g_value_get_double (v);
+      }
+    }
+  }
+
+  gst_audio_fx_base_fir_filter_set_multi_kernel (GST_AUDIO_FX_BASE_FIR_FILTER
+      (self), kernel,
+      channel_filter_length, self->latency, NULL, num_channel_filters);
 }
 
 static void
@@ -151,9 +217,7 @@ gst_audio_fir_filter_update_kernel (GstAudioFIRFilter * self, GValueArray * va)
   guint i;
 
   if (va) {
-    if (self->kernel)
-      g_value_array_free (self->kernel);
-
+    clean_kernels ();
     self->kernel = va;
   }
 
@@ -164,8 +228,8 @@ gst_audio_fir_filter_update_kernel (GstAudioFIRFilter * self, GValueArray * va)
     kernel[i] = g_value_get_double (v);
   }
 
-  gst_audio_fx_base_fir_filter_set_kernel (GST_AUDIO_FX_BASE_FIR_FILTER (self),
-      kernel, self->kernel->n_values, self->latency);
+  gst_audio_fx_base_fir_filter_set_kernel (GST_AUDIO_FX_BASE_FIR_FILTER
+      (self), kernel, self->kernel->n_values, self->latency);
 }
 
 static void
@@ -240,6 +304,13 @@ gst_audio_fir_filter_set_property (GObject * object, guint prop_id,
       gst_audio_fir_filter_update_kernel (self, NULL);
       g_mutex_unlock (self->lock);
       break;
+    case PROP_MULTI_KERNEL:
+      g_mutex_lock (self->lock);
+      /* update kernel already pushes residues */
+      gst_audio_fir_filter_update_multi_kernel (self,
+          g_value_dup_boxed (value));
+      g_mutex_unlock (self->lock);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -256,6 +327,8 @@ gst_audio_fir_filter_get_property (GObject * object, guint prop_id,
     case PROP_KERNEL:
       g_value_set_boxed (value, self->kernel);
       break;
+    case PROP_MULTI_KERNEL:
+      //TODO: repackage self->kernel to GValueArray**
     case PROP_LATENCY:
       g_value_set_uint64 (value, self->latency);
       break;
