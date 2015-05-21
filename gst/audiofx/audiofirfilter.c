@@ -328,7 +328,8 @@ gst_audio_fir_filter_get_property (GObject * object, guint prop_id,
       g_value_set_boxed (value, self->kernel);
       break;
     case PROP_MULTI_KERNEL:
-      //TODO: repackage self->kernel to GValueArray**
+      g_value_set_boxed (value, self->multi_kernel);
+      break;
     case PROP_LATENCY:
       g_value_set_uint64 (value, self->latency);
       break;
