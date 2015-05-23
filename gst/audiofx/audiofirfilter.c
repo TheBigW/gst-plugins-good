@@ -136,6 +136,16 @@ gst_audio_fir_filter_class_init (GstAudioFIRFilterClass * klass)
       g_param_spec_uint64 ("latency", "Latecy",
           "Filter latency in samples",
           0, G_MAXUINT64, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_MULTI_KERNEL,
+      g_param_spec_value_array ("mkernel", "Multiple Filter Kernels",
+          "Filter kernel for the FIR filter per channel",
+          g_param_spec_value_array ("kernel", "Filter Kernel",
+              "array of filter kernels",
+              g_param_spec_double ("Element", "Filter Kernel Element",
+                  "Element of the filter kernel", -G_MAXDOUBLE, G_MAXDOUBLE,
+                  0.0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS),
+              G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS),
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   filter_class->setup = GST_DEBUG_FUNCPTR (gst_audio_fir_filter_setup);
 
@@ -184,30 +194,29 @@ gst_audio_fir_filter_update_multi_kernel (GstAudioFIRFilter * self,
   if (va) {
     clean_kernels (self);
     self->multi_kernel = va;
-
     num_channel_filters = va->n_values;
-    channel_filter_length = ((GValueArray *)
-        g_value_get_object (g_value_array_get_nth (va, 0)))->n_values;
+    GValue *pValue = g_value_array_get_nth (va, 0);
+    void *pObject = g_value_get_boxed (pValue);
+
+    channel_filter_length = ((GValueArray *) pObject)->n_values;
     num_overall_filter_values = num_channel_filters * channel_filter_length;
     kernel = g_new (gdouble, num_overall_filter_values);
-    for (i = 0; i < va->n_values; i++) {
-      GValue *v = g_value_array_get_nth (va, i);
-      sub_kernel = g_value_get_object (v);
+    for (i = 0; i < num_channel_filters; i++) {
+      pValue = g_value_array_get_nth (va, i);
+      sub_kernel = g_value_get_boxed (pValue);
       if (channel_filter_length != sub_kernel->n_values) {
-        GST_WARNING ("kernel length missmatch -> exiting");
         g_free (kernel);
         return;
       }
-      for (j = 0; j < sub_kernel->n_values; i++) {
-        v = g_value_array_get_nth (sub_kernel, j);
+      for (j = 0; j < sub_kernel->n_values; j++) {
+        GValue *v = g_value_array_get_nth (sub_kernel, j);
         kernel[j + i * va->n_values] = g_value_get_double (v);
       }
     }
   }
-
   gst_audio_fx_base_fir_filter_set_multi_kernel (GST_AUDIO_FX_BASE_FIR_FILTER
-      (self), kernel,
-      channel_filter_length, self->latency, NULL, num_channel_filters);
+      (self), kernel, channel_filter_length, self->latency, NULL,
+      num_channel_filters);
 }
 
 static void
