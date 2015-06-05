@@ -52,6 +52,7 @@ struct _GstAudioFIRFilter {
   GstAudioFXBaseFIRFilter parent;
 
   GValueArray *kernel;
+  GValueArray *multi_kernel;
   guint64 latency;
 
   /* < private > */
